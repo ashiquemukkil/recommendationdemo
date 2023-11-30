@@ -1,13 +1,17 @@
 """ API for recommendation
 """
+# import subprocess
 from fastapi import APIRouter
 import logging
 from pydantic import BaseModel
 from router.recommendation import SimilarRecommendation, process_product_ids
+import pandas as pd
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/recommendation")
 
+# from data_creation.create_embeddings import start_embedding
 
 class ProductIdMultiple(BaseModel):
     """Model for receiving multiple product IDs"""
@@ -52,3 +56,25 @@ def recommendation_multiple(Product: ProductIdMultiple):
     """
     recommendation = process_product_ids(Product.product_id, complementary=False)
     return recommendation
+
+@router.get("/items/")
+def get_items(index:int =0,unique:int=0):
+    if unique:
+        return pd.read_excel(f"cleaned_data.xlsx").iloc[index-1]['images']
+    return pd.read_excel(f"cleaned_data.xlsx").loc[index*20:(index+1)*20,['images','variant_code']].values.tolist()
+
+
+# @router.get("/create_embedd")
+# def start_embed():
+#     start_embedding()
+#     # subprocess.run(['python3', 'data_creation/create_embeddings.py'], check=True)
+#     return "STARTED //it will take more than 10min"
+
+# @router.get("/get_embedding_status")
+# def embedding_status():
+#     file_path= 'status.txt'
+#     with open(file_path, 'r') as file:
+#         lines = file.readlines()
+#         if lines:
+#             return lines[-1].strip()
+#     return "Unable to show"

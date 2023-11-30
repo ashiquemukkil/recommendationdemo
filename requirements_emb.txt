@@ -1,5 +1,0 @@
-pandas
-pillow
-sentence_transformers
-pymilvus==2.2.7
-openpyxl

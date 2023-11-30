@@ -5,6 +5,8 @@ Create embeddings for inventory data.
 import numpy as np
 import pandas as pd
 from PIL import Image
+import urllib.request
+import io
 import concurrent.futures
 from sentence_transformers import SentenceTransformer
 from pymilvus import (
@@ -13,9 +15,17 @@ from pymilvus import (
     FieldSchema,
     DataType,
     Collection,
+    utility
 )
 from tqdm import tqdm
-from config import PROJECT_ROOT, ALIAS, USER, PASSWORD, HOST, PORT
+
+ALIAS = "default"
+USER = "username"
+PASSWORD = "password"
+HOST = "127.0.0.1"
+PORT = "19530"
+
+INVENTORY_NAME = "Inventory_embeddings"
 
 
 # Establish a connection
@@ -28,7 +38,8 @@ connections.connect(
 )
 
 # Drop the collection if it already exists
-# utility.drop_collection("Inventory_embeddings")
+utility.drop_collection("Inventory_embeddings")
+
 
 
 def create_collection():
@@ -40,13 +51,10 @@ def create_collection():
         name="variant_barcode", dtype=DataType.VARCHAR, max_length=200, is_primary=True
     )
     image_url = FieldSchema(name="image_url", dtype=DataType.VARCHAR, max_length=200)
-    department = FieldSchema(name="department", dtype=DataType.VARCHAR, max_length=200)
-    class_code = FieldSchema(name="class_code", dtype=DataType.VARCHAR, max_length=200)
     description = FieldSchema(
         name="description", dtype=DataType.VARCHAR, max_length=500
     )
     price = FieldSchema(name="price", dtype=DataType.DOUBLE, max_length=10)
-    season = FieldSchema(name="season", dtype=DataType.VARCHAR, max_length=10)
     combined_embeddings = FieldSchema(
         name="combined_embeddings", dtype=DataType.FLOAT_VECTOR, dim=1024
     )
@@ -55,17 +63,13 @@ def create_collection():
         fields=[
             variant_code,
             image_url,
-            department,
-            class_code,
             description,
             price,
-            season,
-            combined_embeddings,
-            # url,
+            combined_embeddings
         ],
         description="inventory...",
     )
-    collection_name = "Inventory_embeddings"
+    collection_name = INVENTORY_NAME
     collection = Collection(
         name=collection_name, schema=schema, using="default", shards_num=2
     )
@@ -80,11 +84,11 @@ def create_collection():
 
 
 try:
-    collection = Collection("Inventory_embeddings")
+    collection = Collection(INVENTORY_NAME)
     collection.load()
 except Exception as error:
     create_collection()
-    collection = Collection("Inventory_embeddings")
+    collection = Collection(INVENTORY_NAME)
     collection.load()
 
 
@@ -92,6 +96,7 @@ def extract_combined_embeddings(
     model: object,
     inventory: pd.DataFrame,
 ):
+     
     """
     Extract image and text embeddings for each product in an inventory dataframe and insert
     them into a Milvus collection.
@@ -103,15 +108,22 @@ def extract_combined_embeddings(
     Returns:
         None
     """
+  
     try:
         inventory = inventory[1]
         # print(inventory)
-        product_id = inventory["variant_code"]
-        images_url = inventory["image_url"]
+        product_id = str(inventory["variant_code"])
+        images_url = inventory["images"]
         product_text = inventory["description"]
 
+        product_text = " ".join(product_text.split(" ")[:30])
         # Download and preprocess images
-        imgs = Image.open(f"{PROJECT_ROOT}/images/{product_id}.jpg")
+
+        with urllib.request.urlopen(images_url) as my_url_res:
+            my_img_data = my_url_res.read()
+        imgs = Image.open(io.BytesIO(my_img_data))
+        imgs = imgs.resize((1000, 1000))
+
         # Encode image embeddings
         image_embeddings = model.encode(imgs)  # 512
         # Encode text embeddings
@@ -122,25 +134,24 @@ def extract_combined_embeddings(
         combined_emb = np.concatenate(
             (image_embeddings, text_embedding), axis=None
         ).tolist()#1024
+
+
         collection.insert(
             [
                 [product_id],
                 [images_url],
-                [inventory["department_code"]],
-                [inventory["class_code"]],
                 [product_text],
-                [inventory["price"]],
-                [inventory["season"]],
+                [float(inventory["price"])],
                 [combined_emb],
-                # [inventory["url"]],
             ]
         )
+        
     except Exception as error:
-        print(product_id, error)
+        print(product_id, error,images_url)
 
 
 model = SentenceTransformer("clip-ViT-B-32")
-data = pd.read_excel(f"{PROJECT_ROOT}/cleaned_data.xlsx")
+data = pd.read_excel(f"cleaned_data.xlsx").head(500)
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=8) as procedure_extract:
     for output in tqdm(

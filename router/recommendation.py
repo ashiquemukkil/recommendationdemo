@@ -38,7 +38,7 @@ class SimilarRecommendation:
             expr=expression,
             offset=0,
             limit=10,
-            output_fields=["department", "combined_embeddings"],
+            output_fields=["price","variant_barcode", "combined_embeddings"],
             consistency_level="Strong",
         )
 
@@ -49,9 +49,9 @@ class SimilarRecommendation:
                 anns_field="combined_embeddings",
                 param={"metric_type": "L2", "params": {"nprobe": 10}},
                 offset=0,
-                limit=4,
+                limit=5,
                 output_fields=["image_url", "description"],
-                expr=f'department == "{embeddings_result[0]["department"]}"',
+                expr=f'price > {embeddings_result[0]["price"]-500} && price > {embeddings_result[0]["price"]+1000} ',
             )
 
             # Process and format the results
@@ -64,32 +64,32 @@ class SimilarRecommendation:
                 updated_result.append(para_dict)
 
             # Query for random products in the same department
-            expression = f'department == "{embeddings_result[0]["department"]}"'
-            random_products = collection.query(
-                expr=expression,
-                offset=0,
-                limit=7,
-                output_fields=["image_url", "description"],
-                consistency_level="Strong",
-            )
+            # expression = f'price > {embeddings_result[0]["price"]-500} && price > {embeddings_result[0]["price"]+1000} '
+            # random_products = collection.query(
+            #     expr=expression,
+            #     offset=0,
+            #     limit=7,
+            #     output_fields=["image_url", "description"],
+            #     consistency_level="Strong",
+            # )
 
             # Format and filter random product results
-            random_products_results = [
-                {
-                    "variant_code": product["variant_barcode"],
-                    "image_url": product["image_url"],
-                    "description": product["description"],
-                }
-                for product in random_products
-                if product["variant_barcode"]
-                not in list(similar_based_on_distance_results[0].ids)
-            ]
+            # random_products_results = [
+            #     {
+            #         "variant_code": product["variant_barcode"],
+            #         "image_url": product["image_url"],
+            #         "description": product["description"],
+            #     }
+            #     for product in random_products
+            #     if product["variant_barcode"]
+            #     not in list(similar_based_on_distance_results[0].ids)
+            # ]
 
-            # Combine and return the final results
-            final_results = updated_result[1:] + random_products_results[:2]
+            # # Combine and return the final results
+            # final_results = updated_result[1:] + random_products_results[:2]
 
             return {
-                "similar_products": final_results,
+                "similar_products": updated_result,
                 "msg": "SUCCESS",
             }
         else:

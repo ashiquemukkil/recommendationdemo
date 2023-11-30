@@ -5,3 +5,7 @@ PyJWT==2.4.0
 uvicorn==0.17.6
 SQLAlchemy==1.4.37
 pg8000==1.29.5
+requests
+pillow
+sentence_transformers
+openpyxl
